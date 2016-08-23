@@ -2,6 +2,7 @@ var express = require('express');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var session = require('express-session');
 
 
 var db = require('./app/config');
@@ -12,6 +13,7 @@ var Link = require('./app/models/link');
 var Click = require('./app/models/click');
 
 var app = express();
+var auth;
 
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
@@ -23,27 +25,62 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
 
-app.get('/', 
+auth = {
+  isLoggedIn: function(req, res, next) {
+    if (req.user) {
+      console.log('user loggedin!');
+      next();
+    } else {
+      console.log('user not loggedin', req.user);
+      res.redirect('/login');
+      // res.rend
+    }
+  }
+};
+
+app.get('/',
 function(req, res) {
-  res.render('index');
+  if (req.user) {
+    res.render('index');
+  } else {
+    res.redirect('/login');
+  }
 });
 
 app.get('/create', 
 function(req, res) {
-  res.render('index');
+  if (req.user) {
+    res.render('index');
+  } else {
+    res.redirect('/login');
+  }
 });
 
 app.get('/links', 
 function(req, res) {
-  Links.reset().fetch().then(function(links) {
-    res.status(200).send(links.models);
-  });
+  if (req.user) {
+    Links.reset().fetch().then(function(links) {
+      res.status(200).send(links.models);
+    });
+  } else {
+    res.redirect('/login');
+    // res.render('index');
+  }
+});
+
+app.get('/login', function(req, res) {
+  res.render('login');
+});
+
+
+app.get('/signup', function(req, res) {
+  res.render('signup');
 });
 
 app.post('/links', 
 function(req, res) {
   var uri = req.body.url;
-
+  console.log(' POST REQUEST');
   if (!util.isValidUrl(uri)) {
     console.log('Not a valid url: ', uri);
     return res.sendStatus(404);
@@ -75,9 +112,39 @@ function(req, res) {
 /************************************************************/
 // Write your authentication routes here
 /************************************************************/
+app.post('/signup', function (req, res) {
+
+  Users.create({
+    username: req.body.username,
+    password: req.body.password
+  }).then(function(userObj) {
+    // found return the submission from the user on signup page
+    if (userObj) {
+      console.log(userObj.attributes.username, '<--------------------- USERNAME');
+      console.log(userObj.attributes.password, '<--------------------- PASSWORD');
+      res.redirect('/');
+      res.send(userObj.attributes.username);   
+    }
+  });
+});
 
 
+app.post('/login', function (req, res) {
+  console.log(req.body.username);
+  db.knex('users').select('username').where('username', '=', req.body.username).then(function (user) {
+  console.log(user, '<+++++++++++++++++++');
+    if (user.length === 0) {
+      res.redirect('/login');
+      res.send();
+    } else {
+      res.redirect('/');
+      res.send();
+    }
+  });
 
+});
+
+/*{ username: 'Svnh', password: 'Svnh' }*/
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
 // assume the route is a short code and try and handle it here.
