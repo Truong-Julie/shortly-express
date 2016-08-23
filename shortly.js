@@ -24,6 +24,20 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(__dirname + '/public'));
 
+app.use(session({
+  name: 'server-session-cookie-id',
+  secret: 'my express secret',
+  saveUninitialized: true,
+  resave: true,
+  cookie: {maxAge: 600}
+}));
+
+app.use(function printSession(req, res, next) {
+
+  console.log('req.cookie', req.cookie);
+  console.log('req.session', req.session);
+  return next();
+});
 
 auth = {
   isLoggedIn: function(req, res, next) {
@@ -37,6 +51,10 @@ auth = {
     }
   }
 };
+
+// checkUser grabs the user's last login and checks if the last login was in the last 30 mins of now
+  // if 
+    // redirect
 
 app.get('/',
 function(req, res) {
@@ -69,6 +87,7 @@ function(req, res) {
 });
 
 app.get('/login', function(req, res) {
+  console.log('DOES THE SESSION WORK?', req.session);
   res.render('login');
 });
 
@@ -113,10 +132,10 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 app.post('/signup', function (req, res) {
-
   Users.create({
     username: req.body.username,
-    password: req.body.password
+    password: req.body.password,
+    lastLogin: db.knex.fn.now()
   }).then(function(userObj) {
     // found return the submission from the user on signup page
     if (userObj) {
@@ -132,13 +151,17 @@ app.post('/signup', function (req, res) {
 app.post('/login', function (req, res) {
   console.log(req.body.username);
   db.knex('users').select('username').where('username', '=', req.body.username).then(function (user) {
-  console.log(user, '<+++++++++++++++++++');
+    console.log(user, '<+++++++++++++++++++');
     if (user.length === 0) {
       res.redirect('/login');
       res.send();
     } else {
-      res.redirect('/');
-      res.send();
+      db.knex('users').select('username').where('username', '=', req.body.username).update({lastLogin: db.knex.fn.now()}).then(function (updated) {
+        if (updated) {
+          res.redirect('/');
+          res.send();
+        }
+      });
     }
   });
 
