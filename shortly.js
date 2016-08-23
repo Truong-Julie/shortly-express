@@ -29,15 +29,18 @@ app.use(session({
   secret: 'my express secret',
   saveUninitialized: true,
   resave: true,
-  cookie: {maxAge: 600}
+  cookie: {maxAge: 6000}
 }));
+// console.log('after session setting', req.session);
 
 app.use(function printSession(req, res, next) {
-
   console.log('req.cookie', req.session.cookie);
   console.log('req.session', req.session);
   return next();
 });
+
+/*
+, req.session.cookie, req.session.cookie._expires, */
 
 // auth = {
 //   isLoggedIn: function(req, res, next) {
@@ -52,11 +55,19 @@ app.use(function printSession(req, res, next) {
 //   }
 // };
 
-var checkUser = function (req, res) {
-  if (!req.session || !req.session.cookie || req.session.cookie._expires < Date.now()) {
-    res.redirect('/login');
-      console.log('GOT HERE!!');
-    res.send();
+var checkUser = function (req, res, callback) {
+  console.log('req session username', req.session.username);
+  if (!req.session.username || !req.session || !req.session.cookie || req.session.cookie._expires < Date.now()) {
+
+    console.log(req.session, 'GOT checkUser.cookie expired. go to login!!', req.url);
+    if (req.url === '/login') {
+      callback();
+    } else {
+      res.redirect('/login');
+      res.send();
+    }
+  } else {
+    callback();
   }
 };
 
@@ -68,43 +79,61 @@ var checkUser = function (req, res) {
 
 app.get('/',
 function(req, res) {
-  checkUser(req, res);
-  console.log('NOPE IT KEEPS GOING!');
-  if (req.user) {
+  checkUser(req, res, function() {
+    console.log('NOPE IT KEEPS GOING!', req.url);
+    // if (req.user) {
+    //   res.render('index');
+    // } else {
+
+      // res.redirect('/login');
     res.render('index');
-  } else {
-    res.redirect('/login');
-  }
+    res.send();
+    
+    // }
+  });
 });
 
 app.get('/create', 
 function(req, res) {
-  if (req.user) {
-    res.render('index');
-  } else {
-    res.redirect('/login');
-  }
+  checkUser(req, res, function() {
+    // if (req.user) {
+      res.status(200);
+      res.render('index');
+    // } else {
+    //   res.redirect('/login');
+    // }
+  });
 });
 
 app.get('/links', 
 function(req, res) {
-  if (req.user) {
+  checkUser(req, res, function() {
+    console.log('in links cb')
     Links.reset().fetch().then(function(links) {
+      console.log(links, links.model);
       res.status(200).send(links.models);
-    });
-  } else {
-    res.redirect('/login');
-    // res.render('index');
-  }
+    });  // Fetch the link
+  });
+  // console.log('before reset', Links.query({where: {title: 'Funny pictures of animals, funny dog pictures'}}).fetch().then(function(links){
+  //   console.log('links', links);
+  // }));
+  // console.log('after reset', Links.reset());
+
+  // Links.reset();
+  // console.log('after reset', (new Links).models);
+
 });
 
 app.get('/login', function(req, res) {
-  console.log('DOES THE SESSION WORK?', req.session);
-  res.render('login');
+  checkUser(req, res, function() {
+    res.status(200);
+    res.render('login');
+  });
 });
 
-
 app.get('/signup', function(req, res) {
+  console.log('in get signup');
+  res.status(200);
   res.render('signup');
 });
 
@@ -153,8 +182,8 @@ app.post('/signup', function (req, res) {
     if (userObj) {
       console.log(userObj.attributes.username, '<--------------------- USERNAME');
       console.log(userObj.attributes.password, '<--------------------- PASSWORD');
+      // res.send(userObj.attributes.username);   
       res.redirect('/');
-      res.send(userObj.attributes.username);   
     }
   });
 });
@@ -165,15 +194,28 @@ app.post('/login', function (req, res) {
   db.knex('users').select('username').where('username', '=', req.body.username).then(function (user) {
     console.log(user, '<+++++++++++++++++++');
     if (user.length === 0) {
+      console.log(user, '<+++++++++GOT HERE++++++++++');
       res.redirect('/login');
       res.send();
     } else {
-      db.knex('users').select('username').where('username', '=', req.body.username).update({lastLogin: db.knex.fn.now()}).then(function (updated) {
-        if (updated) {
+      console.log(user, 'THERE IS USER<+++++++++++++++++++');
+      db.knex('users').select('username', 'password').where({
+        username: req.body.username,
+        password: req.body.password
+      }).then(function(model) {
+        console.log('model', model);
+        if (model.length !== 0) {
+          req.session.username = model[0].username;
+          db.knex('users').select('username').where('username', '=', req.body.username).update({lastLogin: db.knex.fn.now()}).then(function (updated) {
+            console.log('lastlogin updated');
+          });
+
           res.redirect('/');
-          res.send();
         }
       });
+
+      
+
     }
   });
 
