@@ -34,21 +34,29 @@ app.use(session({
 
 app.use(function printSession(req, res, next) {
 
-  console.log('req.cookie', req.cookie);
+  console.log('req.cookie', req.session.cookie);
   console.log('req.session', req.session);
   return next();
 });
 
-auth = {
-  isLoggedIn: function(req, res, next) {
-    if (req.user) {
-      console.log('user loggedin!');
-      next();
-    } else {
-      console.log('user not loggedin', req.user);
-      res.redirect('/login');
-      // res.rend
-    }
+// auth = {
+//   isLoggedIn: function(req, res, next) {
+//     if (req.user) {
+//       console.log('user loggedin!');
+//       next();
+//     } else {
+//       console.log('user not loggedin', req.user);
+//       res.redirect('/login');
+//       // res.rend
+//     }
+//   }
+// };
+
+var checkUser = function (req, res) {
+  if (!req.session || !req.session.cookie || req.session.cookie._expires < Date.now()) {
+    res.redirect('/login');
+      console.log('GOT HERE!!');
+    res.send();
   }
 };
 
@@ -56,8 +64,12 @@ auth = {
   // if 
     // redirect
 
+// check if req.session.cookie._expires is before now    
+
 app.get('/',
 function(req, res) {
+  checkUser(req, res);
+  console.log('NOPE IT KEEPS GOING!');
   if (req.user) {
     res.render('index');
   } else {
