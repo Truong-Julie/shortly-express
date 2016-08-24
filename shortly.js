@@ -4,6 +4,7 @@ var partials = require('express-partials');
 var bodyParser = require('body-parser');
 var session = require('express-session');
 
+var bcrypt = require('bcrypt-nodejs');
 
 var db = require('./app/config');
 var Users = require('./app/collections/users');
@@ -33,11 +34,11 @@ app.use(session({
 }));
 // console.log('after session setting', req.session);
 
-app.use(function printSession(req, res, next) {
-  console.log('req.cookie', req.session.cookie);
-  console.log('req.session', req.session);
-  return next();
-});
+// app.use(function printSession(req, res, next) {
+//   console.log('req.cookie', req.session.cookie);
+//   console.log('req.session', req.session);
+//   return next();
+// });
 
 /*
 , req.session.cookie, req.session.cookie._expires, */
@@ -87,7 +88,7 @@ function(req, res) {
 
       // res.redirect('/login');
     res.render('index');
-    res.send();
+    // res.send();
     
     // }
   });
@@ -97,8 +98,8 @@ app.get('/create',
 function(req, res) {
   checkUser(req, res, function() {
     // if (req.user) {
-      res.status(200);
-      res.render('index');
+    res.status(200);
+    res.render('index');
     // } else {
     //   res.redirect('/login');
     // }
@@ -108,7 +109,7 @@ function(req, res) {
 app.get('/links', 
 function(req, res) {
   checkUser(req, res, function() {
-    console.log('in links cb')
+    console.log('in links cb');
     Links.reset().fetch().then(function(links) {
       console.log(links, links.model);
       res.status(200).send(links.models);
@@ -126,6 +127,7 @@ function(req, res) {
 
 app.get('/login', function(req, res) {
   checkUser(req, res, function() {
+    console.log('in login')
     res.status(200);
     res.render('login');
   });
@@ -173,25 +175,39 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 app.post('/signup', function (req, res) {
-  Users.create({
-    username: req.body.username,
-    password: req.body.password,
-    lastLogin: db.knex.fn.now()
-  }).then(function(userObj) {
-    // found return the submission from the user on signup page
-    if (userObj) {
-      console.log(userObj.attributes.username, '<--------------------- USERNAME');
-      console.log(userObj.attributes.password, '<--------------------- PASSWORD');
-      // res.send(userObj.attributes.username);   
-      res.redirect('/');
-    }
-  });
-});
+  console.log('<--------------------- SIGN UP POST');
 
+  bcrypt.hash(req.body.password, null, null, function(err, hash) {
+    console.log('in hash!!!');
+    var hash = hash;
+    console.log('hashhh', hash);
+    Users.create({
+      username: req.body.username,
+      password: hash,
+      lastLogin: db.knex.fn.now()
+    }).then(function(userObj) {
+      console.log('in users then');
+      // found return the submission from the user on signup page
+      if (userObj) {
+        console.log(userObj.attributes.username, '<--------------------- USERNAME');
+        req.session.username = req.body.username;
+
+        // console.log(userObj.attributes.password, '<--------------------- PASSWORD');
+        // res.send(userObj.attributes.username);   
+        res.redirect('/');
+      }
+    });
+  });
+  
+});
+app.get('/logout', function(req, res) {
+  req.session.destroy();
+  res.redirect('/login');
+});
 
 app.post('/login', function (req, res) {
   console.log(req.body.username);
-  db.knex('users').select('username').where('username', '=', req.body.username).then(function (user) {
+  db.knex('users').select('username', 'password').where('username', '=', req.body.username).then(function (user) {
     console.log(user, '<+++++++++++++++++++');
     if (user.length === 0) {
       console.log(user, '<+++++++++GOT HERE++++++++++');
@@ -199,20 +215,32 @@ app.post('/login', function (req, res) {
       res.send();
     } else {
       console.log(user, 'THERE IS USER<+++++++++++++++++++');
-      db.knex('users').select('username', 'password').where({
-        username: req.body.username,
-        password: req.body.password
-      }).then(function(model) {
-        console.log('model', model);
-        if (model.length !== 0) {
-          req.session.username = model[0].username;
+      bcrypt.compare(req.body.password, user[0].password, function(err, match) {
+        if (match) {
+          req.session.username = req.body.username;
           db.knex('users').select('username').where('username', '=', req.body.username).update({lastLogin: db.knex.fn.now()}).then(function (updated) {
             console.log('lastlogin updated');
           });
-
           res.redirect('/');
+        } else {
+          console.log('<----- hash not matching!');
+          res.redirect('/login');
         }
       });
+      // db.knex('users').select('username', 'password').where({
+      //   username: req.body.username,
+      //   password: req.body.password
+      // }).then(function(model) {
+      //   console.log('model', model);
+      //   if (model.length !== 0) {
+      //     req.session.username = model[0].username;
+      //     db.knex('users').select('username').where('username', '=', req.body.username).update({lastLogin: db.knex.fn.now()}).then(function (updated) {
+      //       console.log('lastlogin updated');
+      //     });
+
+      //     res.redirect('/');
+      //   }
+      // });
 
       
 
